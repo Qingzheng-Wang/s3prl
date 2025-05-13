@@ -9,10 +9,11 @@ from .pooling import MeanPooling, TemporalAveragePooling, TemporalStatisticsPool
 from .rnn import RNNEncoder, SuperbDiarizationModel
 from .speaker_loss import amsoftmax, softmax
 from .speaker_model import SuperbXvector, XVectorBackbone
-from .upstream import Featurizer, S3PRLUpstream
+from .upstream import Featurizer, S3PRLUpstream, S3PRLUpstreamLang2VecCondition
 
 __all__ = [
     "S3PRLUpstream",
+    "S3PRLUpstreamLang2VecCondition",
     "Featurizer",
     "FrameLevel",
     "UtteranceLevel",
