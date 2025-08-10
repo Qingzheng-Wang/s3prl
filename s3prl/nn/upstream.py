@@ -19,6 +19,7 @@ __all__ = [
     "Featurizer",
     "UpstreamDownstreamModel",
     "S3PRLUpstreamLang2VecCondition",
+    "S3PRLUpstreamCondition",
 ]
 
 MIN_SECOND = 0.05
@@ -308,6 +309,85 @@ class S3PRLUpstreamLang2VecCondition(S3PRLUpstream):
             all_lens.append(h_len)
 
         return all_hs, all_lens, intermediate_lang2vec_preds
+
+class S3PRLUpstreamCondition(S3PRLUpstream):
+    """
+    This is specific for return the intermediate lang2vec predictions in the forward, 
+    other functions are same as the original S3PRLUpstream.
+    """
+    def __init__(
+        self,
+        name: str,
+        path_or_url: str = None,
+        refresh: bool = False,
+        normalize: bool = False,
+        extra_conf: dict = None,
+        randomize: bool = False,
+    ):
+        super().__init__(
+            name,
+            path_or_url=path_or_url,
+            refresh=refresh,
+            normalize=normalize,
+            extra_conf=extra_conf,
+            randomize=randomize,
+        )
+    
+    def forward(self, wavs: torch.FloatTensor, wavs_len: torch.LongTensor, labels: torch.Tensor = None):
+        """
+        Args:
+            wavs (torch.FloatTensor): (batch_size, seqlen) or (batch_size, seqlen, 1)
+            wavs_len (torch.LongTensor): (batch_size, )
+
+        Return:
+            List[torch.FloatTensor], List[torch.LongTensor], List[torch.FloatTensor]
+
+            1. all the layers of hidden states: List[ (batch_size, max_seq_len, hidden_size) ]
+            2. the valid length for each hidden states: List[ (batch_size, ) ]
+            3. the intermediate lang2vec predictions: List[ (batch_size, lang2vec_dim) ]
+        """
+        if wavs.dim() == 3:
+            wavs = wavs.squeeze(-1)
+
+        original_wavs_len = wavs_len
+        if max(original_wavs_len) < MIN_SECOND * SAMPLE_RATE:
+            padded_samples = int(MIN_SECOND * SAMPLE_RATE) - max(original_wavs_len)
+            wavs = torch.cat(
+                (wavs, wavs.new_zeros(wavs.size(0), padded_samples)),
+                dim=1,
+            )
+            wavs_len = wavs_len + padded_samples
+
+        wavs_list = []
+        for wav, wav_len in zip(wavs, wavs_len):
+            wavs_list.append(wav[:wav_len])
+
+        upstream_output = self.upstream(wavs_list, labels)
+        hidden_states = upstream_output["hidden_states"]
+        intermediate_lang2vec_preds = upstream_output["intermediate_lang2vec_preds"]
+        intermediate_lid_logits = upstream_output["intermediate_lid_logits"]
+        assert isinstance(hidden_states, (list, tuple))
+        assert (
+            len(hidden_states) == self.num_layers
+        ), f"{len(hidden_states)}, {self.num_layers}"
+
+        max_wav_len = int(max(wavs_len))
+        all_hs = []
+        all_lens = []
+        for h, stride in zip(hidden_states, self.downsample_rates):
+            expected_max_h_len = len(range(0, max_wav_len, stride))
+            h = self._match_length(h, expected_max_h_len)
+            assert h.size(1) == expected_max_h_len
+
+            h_len = torch.div(original_wavs_len - 1, stride, rounding_mode="floor") + 1
+            h = h[:, : max(h_len), :]
+            if self.normalize:
+                h = F.layer_norm(h, h.shape[-1:])
+
+            all_hs.append(h)
+            all_lens.append(h_len)
+
+        return all_hs, all_lens, intermediate_lang2vec_preds, intermediate_lid_logits
 
 
 class Featurizer(nn.Module):
