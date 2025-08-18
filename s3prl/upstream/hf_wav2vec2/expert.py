@@ -1,7 +1,7 @@
 import logging
 
 import torch
-from transformers import Wav2Vec2FeatureExtractor, Wav2Vec2Model, Wav2Vec2ModelLang2VecCondition, Wav2Vec2ModelCondition
+from transformers import Wav2Vec2FeatureExtractor, Wav2Vec2Model
 
 SAMPLE_RATE = 16000
 EXAMPLE_SEC = 5
@@ -43,6 +43,18 @@ class UpstreamExpert(torch.nn.Module):
 class UpstreamExpertLang2VecCondition(UpstreamExpert):
     def __init__(self, ckpt, **kwds):
         super().__init__(ckpt, **kwds)
+        try:
+            from transformers import Wav2Vec2ModelLang2VecCondition
+        except Exception as e:
+            raise ImportError(
+                "Error: Wav2Vec2ModelLang2VecCondition is not found.\n"
+                "Please install the modified transformers version:\n"
+                "  If you have already installed transformers, please uninstall it first.\n"
+                "  (optional) pip uninstall transformers\n"
+                "  git clone -b v4.51.3-qingzheng https://github.com/Qingzheng-Wang/transformers.git\n"
+                "  cd transformers\n"
+                "  pip install -e ."
+            )
         self.model = Wav2Vec2ModelLang2VecCondition.from_pretrained(ckpt)
     
     def forward(self, wavs):
@@ -62,6 +74,18 @@ class UpstreamExpertLang2VecCondition(UpstreamExpert):
 class UpstreamExpertCondition(UpstreamExpert):
     def __init__(self, ckpt, **kwds):
         super().__init__(ckpt, **kwds)
+        try:
+            from transformers import Wav2Vec2ModelCondition
+        except Exception as e:
+            raise ImportError(
+                "Error: Wav2Vec2ModelCondition is not found.\n"
+                "Please install the modified transformers version:\n"
+                "  If you have already installed transformers, please uninstall it first.\n"
+                "  (optional) pip uninstall transformers\n"
+                "  git clone -b v4.51.3-qingzheng https://github.com/Qingzheng-Wang/transformers.git\n"
+                "  cd transformers\n"
+                "  pip install -e ."
+            )
         self.model = Wav2Vec2ModelCondition.from_pretrained(ckpt)
     
     def forward(self, wavs, labels=None):
